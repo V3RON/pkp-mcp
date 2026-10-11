@@ -9,8 +9,6 @@ export interface Config {
   apiKey: string | undefined
   baseUrl: string
   cacheDir: string
-  /** Explicit language override (PKP_MCP_LANG). Detection happens in i18n. */
-  langOverride: string | undefined
   debug: boolean
 }
 
@@ -21,7 +19,6 @@ export function loadConfig(env: Env = process.env, platform: NodeJS.Platform = p
     apiKey: nonEmpty(env.PKP_API_KEY),
     baseUrl: (nonEmpty(env.PKP_API_BASE_URL) ?? DEFAULT_BASE_URL).replace(/\/+$/, ''),
     cacheDir: nonEmpty(env.PKP_MCP_CACHE_DIR) ?? defaultCacheDir(env, platform),
-    langOverride: nonEmpty(env.PKP_MCP_LANG),
     debug: env.PKP_MCP_LOG === 'debug',
   }
 }

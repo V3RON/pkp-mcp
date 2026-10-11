@@ -1,35 +1,35 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { ApiError } from '../api/client.ts'
 import { SIGNUP_URL } from '../config.ts'
-import type { Messages } from '../i18n/index.ts'
 import { log, redact } from '../log.ts'
+import { messages as m } from '../messages.ts'
 
 export function text(body: string): CallToolResult {
   return { content: [{ type: 'text', text: body }] }
 }
 
-/** Turns any failure into a one-line, localized tool error the model can act on. */
-export function toolError(error: unknown, msgs: Messages): CallToolResult {
-  const body = errorText(error, msgs)
+/** Turns any failure into a one-line tool error the model can act on. */
+export function toolError(error: unknown): CallToolResult {
+  const body = errorText(error)
   if (!(error instanceof ApiError) || error.kind === 'http' || error.kind === 'network') {
     log.error('tool failed', error)
   }
   return { content: [{ type: 'text', text: body }], isError: true }
 }
 
-function errorText(error: unknown, msgs: Messages): string {
+function errorText(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.kind) {
       case 'missing_key':
-        return msgs.missingKey(SIGNUP_URL)
+        return m.missingKey(SIGNUP_URL)
       case 'unauthorized':
-        return msgs.invalidKey(SIGNUP_URL)
+        return m.invalidKey(SIGNUP_URL)
       case 'rate_limited':
-        return msgs.rateLimited(
+        return m.rateLimited(
           error.retryAfterSec === undefined ? undefined : Math.ceil(error.retryAfterSec / 60),
         )
       case 'network':
-        return msgs.apiUnavailable
+        return m.apiUnavailable
       default:
         return redact(error.message)
     }

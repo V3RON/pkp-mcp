@@ -1,6 +1,6 @@
-export const en = {
+/** User-facing strings for tool results. */
+export const messages = {
   city: 'city',
-  station: 'station',
   stationsCount: (n: number) => (n === 1 ? '1 station' : `${n} stations`),
   noPlaceMatch: (query: string) => `No station or city matches "${query}".`,
   placeMatches: (query: string, shown: number, total: number) =>
@@ -16,5 +16,3 @@ export const en = {
   apiUnavailable: 'The PKP API is unavailable right now, and there is no cached data for this request.',
   staleNote: (at: string) => `(cached data from ${at}; the PKP API is unavailable)`,
 }
-
-export type Messages = typeof en

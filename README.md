@@ -50,26 +50,10 @@ Keep the key in these client config files (they live in your home directory) or 
 | Variable | Purpose |
 |---|---|
 | `PKP_API_KEY` | API key (required for data) |
-| `PKP_MCP_LANG` | Output language override: `pl` or `en` |
 | `PKP_MCP_CACHE_DIR` | Cache location (default: `~/.cache/pkp-mcp`, `~/Library/Caches/pkp-mcp` on macOS, `%LOCALAPPDATA%\pkp-mcp\Cache` on Windows) |
 | `PKP_MCP_LOG=debug` | Verbose logs on stderr |
 
 Behind an HTTP proxy, also set `NODE_USE_ENV_PROXY=1` so Node's `fetch` uses `HTTPS_PROXY`.
-
-### Output language
-
-Tool results are in Polish or English. The server picks the first signal it finds:
-
-1. `PKP_MCP_LANG`
-2. A per-request language preference from the MCP client (`_meta["io.modelcontextprotocol/acceptLanguage"]`,
-   proposed in MCP SEP-2792; no client sends it yet)
-3. Claude Code's `language` setting (`settings.json`), when running under Claude Code
-4. `LC_ALL`, `LC_MESSAGES`, `LANG` (and `LANGUAGE`), the usual POSIX locale variables
-5. Windows: the user's regional format; macOS: the system language list, when no locale variable is set
-6. English
-
-Codex forwards `LANG` and `LC_ALL` but not `LC_MESSAGES` or `LANGUAGE`. If you rely on those, add
-`env_vars = ["LC_MESSAGES", "LANGUAGE"]` to the server's Codex config, or just set `PKP_MCP_LANG`.
 
 ## Caching
 
@@ -79,7 +63,7 @@ not use up the request quota. The station and city catalogue (2 requests) is kep
 ## CLI
 
 ```sh
-node dist/index.js status            # cache, language, request usage
+node dist/index.js status            # cache and request usage
 node dist/index.js status --remote   # also asks the API about your key
 node dist/index.js clear-cache
 ```

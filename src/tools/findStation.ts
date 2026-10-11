@@ -17,13 +17,12 @@ export function registerFindStation(server: McpServer, ctx: Context): void {
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    async ({ query, limit }, extra) => {
-      const msgs = await ctx.locale.messagesFor(extra._meta)
+    async ({ query, limit }) => {
       try {
         const result = await ctx.places.search(query, limit ?? 5)
-        return text(formatPlaceSearch(query, result, msgs))
+        return text(formatPlaceSearch(query, result))
       } catch (error) {
-        return toolError(error, msgs)
+        return toolError(error)
       }
     },
   )

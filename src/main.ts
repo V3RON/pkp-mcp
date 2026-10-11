@@ -10,13 +10,12 @@ const HELP = `pkp-mcp ${SERVER_VERSION} — MCP server for Polish train timetabl
 
 Usage:
   pkp-mcp                  start the MCP server on stdio (used by Claude Code / Codex)
-  pkp-mcp status [--remote] show cache, language and request usage (--remote asks the API about the key)
+  pkp-mcp status [--remote] show cache and request usage (--remote asks the API about the key)
   pkp-mcp clear-cache      delete the local cache
   pkp-mcp --help | --version
 
 Environment:
   PKP_API_KEY         API key from https://pdp-api.plk-sa.pl/ (required for data)
-  PKP_MCP_LANG        output language override: pl | en
   PKP_MCP_CACHE_DIR   cache directory override
   PKP_MCP_LOG=debug   verbose logging to stderr`
 
@@ -57,6 +56,4 @@ async function serve(config: ReturnType<typeof loadConfig>): Promise<void> {
   const server = createServer(app)
   await server.connect(new StdioServerTransport())
   log.info('ready')
-  // Resolve the language in the background so the first tool call doesn't wait for it.
-  void app.locale.base().then((locale) => log.debug('language', locale))
 }

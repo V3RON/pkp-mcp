@@ -10,8 +10,6 @@ export async function runStatus(app: App, remote: boolean): Promise<string> {
   const lines: string[] = []
   const dbPath = join(app.config.cacheDir, 'cache.db')
   lines.push(`cache:     ${dbPath} (${formatBytes(fileSize(dbPath))})`)
-  const locale = await app.locale.base()
-  lines.push(`language:  ${locale.lang} (from ${locale.source})`)
   lines.push(`api key:   ${app.config.apiKey ? 'set' : 'NOT SET (PKP_API_KEY)'}`)
 
   const fetchedAt = app.places.fetchedAt()
