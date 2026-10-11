@@ -3,8 +3,18 @@
 A local [MCP](https://modelcontextprotocol.io) server for Polish train timetables, built on the
 [PKP PLK Open Data API](https://pdp-api.plk-sa.pl/). Works with Claude Code and Codex.
 
-> Work in progress. Available now: `find_station`. Coming next: connection search (with transfers),
-> station boards and live train details.
+> Work in progress. Coming next: connections with transfers and live train details.
+
+## Tools
+
+| Tool | What it does |
+|---|---|
+| `search_connections` | Direct trains between two stations or cities on a date, with time window, category, carrier and sort options |
+| `station_board` | Departures or arrivals at a station or city |
+| `find_station` | Station and city lookup (other tools accept names directly) |
+
+Station and city names work with or without Polish characters. A city name (e.g. `Warszawa`) covers all its
+stations. Results are compact text, one line per train, with a `ref` for follow-up questions.
 
 Data source: **PKP Polskie Linie Kolejowe S.A.**
 
@@ -58,7 +68,13 @@ Behind an HTTP proxy, also set `NODE_USE_ENV_PROXY=1` so Node's `fetch` uses `HT
 ## Caching
 
 Responses are cached in a SQLite file shared by every client on the machine, so repeated questions do
-not use up the request quota. The station and city catalogue (2 requests) is kept for 30 days.
+not use up the request quota:
+
+- the station and city catalogue (2 requests) is kept for 30 days;
+- each origin/destination pair or station board costs 1 request per date, reused until the published
+  timetable changes (checked at most once an hour);
+- filters and time windows are applied locally, so asking the same question differently is free;
+- if the API is unreachable, older cached data is served with a note.
 
 ## CLI
 

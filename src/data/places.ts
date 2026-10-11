@@ -1,7 +1,9 @@
 import type { PdpClient } from '../api/client.ts'
 import { citiesResponse, stationsResponse } from '../api/schemas.ts'
 import { type Db, datasetFetchedAt, markDatasetFetched, transaction } from '../cache/db.ts'
+import { UserError } from '../errors.ts'
 import { log } from '../log.ts'
+import { messages as m } from '../messages.ts'
 import { normalizeName } from '../text.ts'
 
 export const PLACES_TTL_MS = 30 * 24 * 60 * 60 * 1000
@@ -20,6 +22,13 @@ export interface City {
 }
 
 export type Place = Station | City
+
+/** A place a tool should search from/to: one station, or every station of a city. */
+export interface ResolvedPlace {
+  name: string
+  stationIds: number[]
+  isCity: boolean
+}
 
 export interface PlaceSearch {
   matches: Place[]
@@ -77,6 +86,35 @@ export class Places {
     const staleSince = await this.ensureLoaded()
     const ranked = rank(this.index ?? [], query, this.stationsById)
     return { matches: ranked.slice(0, limit), total: ranked.length, staleSince }
+  }
+
+  /**
+   * Picks the place a free-text query means, or throws a UserError listing candidates. Accepted when
+   * the best match is exact, unique, a city whose stations make up all other matches, or in a
+   * better ranking tier than the runner-up.
+   */
+  async resolve(query: string): Promise<ResolvedPlace & { staleSince: number | undefined }> {
+    const staleSince = await this.ensureLoaded()
+    const ranked = rankScored(this.index ?? [], query, this.stationsById)
+    const [top, second] = ranked
+    if (!top) throw new UserError(m.noPlaceMatch(query))
+    const city = top.place.kind === 'city' ? new Set(top.place.stationIds) : undefined
+    const clear =
+      !second ||
+      top.score >= EXACT ||
+      tier(top.score) > tier(second.score) ||
+      (city !== undefined && ranked.slice(1).every((r) => r.place.kind === 'station' && city.has(r.place.id)))
+    if (!clear)
+      throw new UserError(
+        m.ambiguousPlace(
+          query,
+          ranked.slice(0, 4).map((r) => describe(r.place)),
+        ),
+      )
+    const place = top.place
+    return place.kind === 'city'
+      ? { name: place.name, stationIds: place.stationIds, isCity: true, staleSince }
+      : { name: place.name, stationIds: [place.id], isCity: false, staleSince }
   }
 
   stationName(id: number): string | undefined {
@@ -162,10 +200,20 @@ export function cityDisplayName(name: string): string {
  * (in order) > substring. Within a tier, cities with more stations come first, then shorter names.
  */
 export function rank(entries: IndexEntry[], query: string, byId: Map<number, Station>): Place[] {
+  return rankScored(entries, query, byId).map((s) => s.place)
+}
+
+const EXACT = 100
+
+function rankScored(
+  entries: IndexEntry[],
+  query: string,
+  byId: Map<number, Station>,
+): { place: Place; score: number }[] {
   const trimmed = query.trim()
   if (/^\d+$/.test(trimmed)) {
     const station = byId.get(Number(trimmed))
-    return station ? [station] : []
+    return station ? [{ place: station, score: EXACT }] : []
   }
   const q = normalizeName(trimmed)
   if (!q) return []
@@ -182,11 +230,20 @@ export function rank(entries: IndexEntry[], query: string, byId: Map<number, Sta
       a.place.name.length - b.place.name.length ||
       a.place.name.localeCompare(b.place.name, 'pl'),
   )
-  return scored.map((s) => s.place)
+  return scored
+}
+
+/** Ranking tier without the small city bonus. */
+function tier(score: number): number {
+  return Math.floor(score / 10)
+}
+
+function describe(place: Place): string {
+  return place.kind === 'city' ? `${place.name} (${m.city})` : place.name
 }
 
 function scoreEntry(e: IndexEntry, q: string, qTokens: string[]): number {
-  if (e.norm === q) return 100
+  if (e.norm === q) return EXACT
   if (e.norm.startsWith(q)) return 80
   if (tokensPrefixInOrder(e.tokens, qTokens)) return 60
   if (e.norm.includes(q)) return 40

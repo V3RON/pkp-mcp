@@ -1,6 +1,6 @@
 import type { PlaceSearch } from '../data/places.ts'
 import { messages as m } from '../messages.ts'
-import { formatWarsawDateTime } from './time.ts'
+import { formatWarsawDateTime } from '../time.ts'
 
 /**
  * One line per match, e.g.

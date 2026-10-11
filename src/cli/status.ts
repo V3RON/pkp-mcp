@@ -1,8 +1,8 @@
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { App } from '../app.ts'
-import { formatWarsawDateTime } from '../format/time.ts'
 import { redact } from '../log.ts'
+import { formatWarsawDateTime } from '../time.ts'
 
 /** `pkp-mcp status [--remote]`: local cache/quota overview; --remote also asks the API about the key. */
 export async function runStatus(app: App, remote: boolean): Promise<string> {

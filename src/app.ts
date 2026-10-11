@@ -1,8 +1,11 @@
 import { PdpClient } from './api/client.ts'
 import { type Db, housekeeping, openCacheDb } from './cache/db.ts'
 import { QuotaTracker } from './cache/quota.ts'
+import { ScheduleCache } from './cache/scheduleCache.ts'
 import type { Config } from './config.ts'
 import { Places } from './data/places.ts'
+import { Timetables } from './data/timetables.ts'
+import { DataVersion } from './data/version.ts'
 import { configureLog } from './log.ts'
 import type { Context } from './tools/context.ts'
 
@@ -23,5 +26,6 @@ export function createApp(config: Config): App {
     apiKey: config.apiKey,
     onRequest: (at, headers) => quota?.record(at, headers),
   })
-  return { config, db, quota, client, places: new Places(db, client) }
+  const timetables = new Timetables(client, new ScheduleCache(db, new DataVersion(db, client)))
+  return { config, db, quota, client, places: new Places(db, client), timetables, now: Date.now }
 }

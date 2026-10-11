@@ -5,6 +5,21 @@ export const messages = {
   noPlaceMatch: (query: string) => `No station or city matches "${query}".`,
   placeMatches: (query: string, shown: number, total: number) =>
     total > shown ? `Matches for "${query}" (${shown} of ${total}):` : `Matches for "${query}":`,
+  ambiguousPlace: (query: string, candidates: string[]) =>
+    `"${query}" is ambiguous: ${candidates.join(', ')}. Use a more specific name or a station ID.`,
+  badDate: (value: string) => `Invalid date "${value}". Use YYYY-MM-DD.`,
+  badTime: (name: string, value: string) => `Invalid ${name} "${value}". Use HH:MM (24-hour).`,
+  samePlace: (name: string) => `Origin and destination are the same place (${name}).`,
+  noDirect: (from: string, to: string, date: string, window: string) =>
+    `No direct trains ${from} → ${to} on ${date}${window}.`,
+  noBoard: (station: string, type: string, date: string, window: string) =>
+    `No ${type} at ${station} on ${date}${window}.`,
+  windowFrom: (time: string) => ` after ${time}`,
+  windowUntil: (time: string) => ` until ${time}`,
+  knownCategories: (values: string[]) => `Categories here: ${values.join(', ')}.`,
+  knownCarriers: (values: string[]) => `Carriers here: ${values.join(', ')}.`,
+  moreAfter: (param: string, time: string) => `More: ${param}=${time}`,
+  moreBefore: (time: string) => `Earlier: arrive_before=${time}`,
   missingKey: (signupUrl: string) =>
     `PKP_API_KEY is not set. Request a free key at ${signupUrl} and add it to the MCP server's env.`,
   invalidKey: (signupUrl: string) =>

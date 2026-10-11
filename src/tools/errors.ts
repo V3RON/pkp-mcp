@@ -1,6 +1,7 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { ApiError } from '../api/client.ts'
 import { SIGNUP_URL } from '../config.ts'
+import { UserError } from '../errors.ts'
 import { log, redact } from '../log.ts'
 import { messages as m } from '../messages.ts'
 
@@ -11,7 +12,10 @@ export function text(body: string): CallToolResult {
 /** Turns any failure into a one-line tool error the model can act on. */
 export function toolError(error: unknown): CallToolResult {
   const body = errorText(error)
-  if (!(error instanceof ApiError) || error.kind === 'http' || error.kind === 'network') {
+  const expected =
+    error instanceof UserError ||
+    (error instanceof ApiError && error.kind !== 'http' && error.kind !== 'network')
+  if (!expected) {
     log.error('tool failed', error)
   }
   return { content: [{ type: 'text', text: body }], isError: true }
