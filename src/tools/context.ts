@@ -1,4 +1,5 @@
 import type { PdpClient } from '../api/client.ts'
+import type { Live } from '../data/live.ts'
 import type { Places } from '../data/places.ts'
 import type { Timetables } from '../data/timetables.ts'
 
@@ -7,5 +8,6 @@ export interface Context {
   client: PdpClient
   places: Places
   timetables: Timetables
+  live: Live
   now: () => number
 }

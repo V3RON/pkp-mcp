@@ -3,18 +3,20 @@
 A local [MCP](https://modelcontextprotocol.io) server for Polish train timetables, built on the
 [PKP PLK Open Data API](https://pdp-api.plk-sa.pl/). Works with Claude Code and Codex.
 
-> Work in progress. Coming next: live train details (delays, cancellations, disruptions).
-
 ## Tools
 
 | Tool | What it does |
 |---|---|
 | `search_connections` | Trains between two stations or cities on a date, including up to 2 changes, with time window, minimum change time, category, carrier and sort options |
 | `station_board` | Departures or arrivals at a station or city |
+| `train_details` | One train's stops and platforms, with live delay, cancellations and disruptions; by `ref` or train number |
 | `find_station` | Station and city lookup (other tools accept names directly) |
 
 Station and city names work with or without Polish characters. A city name (e.g. `Warszawa`) covers all its
 stations. Results are compact text, one line per train, with a `ref` for follow-up questions.
+
+`search_connections` and `station_board` accept `live: true` to add current delays and cancellations
+(today only, one extra request). `train_details` includes live data by default.
 
 Data source: **PKP Polskie Linie Kolejowe S.A.**
 
@@ -77,7 +79,11 @@ not use up the request quota:
 - journeys with changes need the whole network's timetable for the date: one larger request (tens of MB),
   made only when direct trains are not enough; after that every search for that date is answered locally;
 - filters and time windows are applied locally, so asking the same question differently is free;
-- if the API is unreachable, older cached data is served with a note.
+- live delays are cached for a minute and disruptions for 15 minutes;
+- looking a train up by number (instead of a `ref`) needs that date's full network timetable;
+- if the API is unreachable, older cached data is served with a note;
+- when less than 10% of the hourly or daily quota is left, live data is skipped so timetable searches keep
+  working (limits assumed to be the Basic tier unless the API reports remaining quota).
 
 ## CLI
 

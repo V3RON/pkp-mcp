@@ -119,3 +119,22 @@ export function tripRef(trip: Trip): string {
       : `${trip.orderId}`
   return `${trip.scheduleId}/${order}/${trip.operatingDate}`
 }
+
+export interface TripRef {
+  scheduleId: number
+  orderId: number
+  trainOrderId: number | undefined
+  operatingDate: string
+}
+
+/** Inverse of `tripRef`: "26/171034/2026-10-12" or "26/171034-171035/2026-10-12". */
+export function parseRef(ref: string): TripRef | undefined {
+  const match = /^\s*(\d+)\/(\d+)(?:-(\d+))?\/(\d{4}-\d{2}-\d{2})\s*$/.exec(ref)
+  if (!match) return undefined
+  return {
+    scheduleId: Number(match[1]),
+    orderId: Number(match[2]),
+    trainOrderId: match[3] === undefined ? undefined : Number(match[3]),
+    operatingDate: match[4] as string,
+  }
+}

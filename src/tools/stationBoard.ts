@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import type { Stop, Trip } from '../data/trips.ts'
 import { formatBoard } from '../format/board.ts'
 import { placeLabel } from '../format/connections.ts'
 import { takeWholeMinutes } from '../format/trains.ts'
@@ -15,9 +16,11 @@ import {
   clockParam,
   dateParam,
   distinct,
+  liveParam,
   parseDate,
   parseTime,
 } from './inputs.ts'
+import { liveDateOk, liveLabels } from './live.ts'
 
 export function registerStationBoard(server: McpServer, ctx: Context): void {
   server.registerTool(
@@ -34,6 +37,7 @@ export function registerStationBoard(server: McpServer, ctx: Context): void {
         categories: categoriesParam,
         carriers: carriersParam,
         limit: z.number().int().min(1).max(30).optional().describe('Default 10'),
+        live: liveParam,
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
@@ -56,6 +60,7 @@ interface Input {
   categories?: string[] | undefined
   carriers?: string[] | undefined
   limit?: number | undefined
+  live?: boolean | undefined
 }
 
 async function stationBoard(ctx: Context, input: Input): Promise<string> {
@@ -92,6 +97,15 @@ async function stationBoard(ctx: Context, input: Input): Promise<string> {
   const last = shown[shown.length - 1]
   const hint =
     last && shown.length < entries.length ? m.moreAfter('from_time', formatClock(last.time + 1)) : undefined
+  let delayOf: ((trip: Trip, stop: Stop) => string) | undefined
+  const notes: string[] = []
+  if (input.live) {
+    if (liveDateOk(date, today.date)) {
+      const live = await liveLabels(ctx, place.stationIds, type === 'departures' ? 'dep' : 'arr')
+      delayOf = live.delayOf
+      if (live.note) notes.push(live.note)
+    } else notes.push(m.liveOnlyRecent)
+  }
   const body = formatBoard({
     stationLabel: place.name,
     isCity: place.isCity,
@@ -101,6 +115,7 @@ async function stationBoard(ctx: Context, input: Input): Promise<string> {
     total: entries.length,
     hint,
     nameOf,
+    delayOf,
   })
-  return [body, ...staleLine].join('\n')
+  return [body, ...notes, ...staleLine].join('\n')
 }

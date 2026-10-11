@@ -1,10 +1,10 @@
 import type { PdpClient } from '../api/client.ts'
-import { expandShortSchedules, schedulesResponse, shortSchedulesResponse } from '../api/schemas.ts'
+import { expandShortSchedules, route, schedulesResponse, shortSchedulesResponse } from '../api/schemas.ts'
 import type { ScheduleCache } from '../cache/scheduleCache.ts'
 import { log } from '../log.ts'
 import { buildNetwork, type Network } from '../planner/network.ts'
 import { addDays, dateEpochMs } from '../time.ts'
-import { type Timetable, toTimetable } from './trips.ts'
+import { type Timetable, type Trip, toTimetable } from './trips.ts'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const BOARD_TIMEOUT_MS = 30_000
@@ -79,6 +79,45 @@ export class Timetables {
     return { ...value, staleSince }
   }
 
+  /**
+   * One train's planned route on its operating date. Served from the whole-network timetable when
+   * that is cached; otherwise one request, cached like other timetable data.
+   */
+  async trip(
+    scheduleId: number,
+    orderId: number,
+    operatingDate: string,
+  ): Promise<{ trip: Trip | undefined; staleSince: number | undefined }> {
+    if (await this.networkReady(operatingDate)) {
+      const { network, staleSince } = await this.network(operatingDate)
+      const trip = network.trips.find(
+        (t) => t.scheduleId === scheduleId && t.orderId === orderId && t.operatingDate === operatingDate,
+      )
+      if (trip) return { trip, staleSince }
+    }
+    const { value, staleSince } = await this.cache.get(
+      `route:${scheduleId}/${orderId}`,
+      Date.now() + 7 * DAY_MS,
+      () => this.client.getJson(`api/v1/schedules/route/${scheduleId}/${orderId}`),
+      (body) => route.parse(body),
+    )
+    const [trip] = toTimetable({ routes: [value] }, [operatingDate]).trips
+    return { trip, staleSince }
+  }
+
+  /** Trains with this number on a date. Needs the whole-network timetable (one large request per date). */
+  async byNumber(number: string, date: string): Promise<{ trips: Trip[]; staleSince: number | undefined }> {
+    const wanted = normalizeNumber(number)
+    const { network, staleSince } = await this.network(date)
+    const trips = network.trips.filter(
+      (t) =>
+        t.operatingDate === date &&
+        (normalizeNumber(t.number ?? '') === wanted ||
+          t.stops.some((s) => normalizeNumber(s.number ?? '') === wanted)),
+    )
+    return { trips, staleSince }
+  }
+
   /** Whether the whole-network timetable for `date` is cached, i.e. transfer search costs no request. */
   networkReady(date: string): Promise<boolean> {
     return this.cache.isReady(networkKey(date))
@@ -112,6 +151,11 @@ export class Timetables {
 
 function hasStops(routes: { stations?: unknown[] | null | undefined }[] | null | undefined): boolean {
   return !routes?.length || routes.some((r) => (r.stations?.length ?? 0) > 0)
+}
+
+/** "IC 3510", "3510", "35 10" → "3510" (numbers are compared without category or spaces). */
+function normalizeNumber(value: string): string {
+  return value.replace(/^[A-Za-z]+\s*/, '').replace(/\s+/g, '')
 }
 
 function networkKey(date: string): string {

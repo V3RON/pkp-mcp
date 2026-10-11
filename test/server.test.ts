@@ -2,8 +2,11 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { describe, expect, it } from 'vitest'
 import { PdpClient } from '../src/api/client.ts'
+import { Budget } from '../src/cache/budget.ts'
 import { openMemoryDb } from '../src/cache/db.ts'
 import { ScheduleCache } from '../src/cache/scheduleCache.ts'
+import { TtlCache } from '../src/cache/ttlCache.ts'
+import { Live } from '../src/data/live.ts'
 import { Places } from '../src/data/places.ts'
 import { Timetables } from '../src/data/timetables.ts'
 import { DataVersion } from '../src/data/version.ts'
@@ -39,6 +42,7 @@ async function connect(
       client,
       new ScheduleCache(db, new DataVersion(db, client, () => NOW), () => NOW),
     ),
+    live: new Live(client, new TtlCache(db, () => NOW), new Budget(undefined)),
     now: () => NOW,
   })
   const mcp = new Client({ name: 'test', version: '0' })
@@ -55,10 +59,15 @@ describe('MCP server', () => {
   it('exposes compact tool definitions without output schemas', async () => {
     const mcp = await connect()
     const { tools } = await mcp.listTools()
-    expect(tools.map((t) => t.name)).toEqual(['search_connections', 'station_board', 'find_station'])
+    expect(tools.map((t) => t.name)).toEqual([
+      'search_connections',
+      'station_board',
+      'train_details',
+      'find_station',
+    ])
     expect(tools.every((t) => t.outputSchema === undefined)).toBe(true)
     // Every definition is sent with every model request: keep the total small.
-    expect(JSON.stringify(tools).length).toBeLessThan(3500)
+    expect(JSON.stringify(tools).length).toBeLessThan(4800)
   })
 
   it('answers find_station with compact text lines', async () => {
@@ -386,5 +395,208 @@ describe('MCP server', () => {
       arguments: { from: 'Kraków Główny', to: 'Łódź Kaliska' },
     })
     expect(mcp.calls.length).toBe(before)
+  })
+
+  describe('train_details', () => {
+    // Bielsko-Biała Główna 06:00 → Kraków Główny 10:00/10:05 → Warszawa Centralna 12:40.
+    const route = schedules([
+      {
+        orderId: 201,
+        number: '1302',
+        name: 'Wawel',
+        dates: ['2026-10-11', '2026-10-12'],
+        stops: [
+          [60111, null, '06:00', { departurePlatform: '1' }],
+          [33019, '10:00', '10:05', { departurePlatform: '4', departureTrack: '7' }],
+          [34868, '12:30', '12:31', { stopTypeName: 'postój techniczny' }],
+          [33605, '12:40', null, { arrivalPlatform: '2' }],
+        ],
+      },
+    ]).routes[0]
+    const operation = {
+      scheduleId: 26,
+      orderId: 201,
+      trainOrderId: 201,
+      operatingDate: '2026-10-11',
+      trainStatus: 'P',
+      stations: [
+        { stationId: 60111, actualDeparture: '2026-10-11T06:02:00', isConfirmed: true, isCancelled: false },
+        {
+          stationId: 33019,
+          actualArrival: '2026-10-11T10:07:00',
+          departureDelayMinutes: null,
+          isConfirmed: true,
+          isCancelled: false,
+        },
+      ],
+    }
+    const disruptions = {
+      disruptions: [
+        {
+          disruptionId: 1,
+          disruptionTypeCode: 'utr_1',
+          message: 'Zmiana peronu w Warszawie Centralnej.',
+          affectedRoutes: [{ scheduleId: 26, orderId: 201, operatingDate: '2026-10-11', stationId: 33605 }],
+        },
+        {
+          disruptionId: 2,
+          message: 'Inny pociąg.',
+          affectedRoutes: [{ scheduleId: 26, orderId: 999, operatingDate: '2026-10-11', stationId: 1 }],
+        },
+      ],
+      disruptionTypes: { utr_1: 'Zmiana peronu' },
+    }
+    const routes = {
+      '/api/v1/schedules/route/26/201': () => json(route),
+      '/api/v1/operations/train/26/201/2026-10-11': () => json(operation),
+      '/api/v1/disruptions': () => json(disruptions),
+    }
+
+    it('shows stops, live delay and disruptions for a ref', async () => {
+      const mcp = await connect({ routes })
+      const result = await mcp.callTool({ name: 'train_details', arguments: { ref: '26/201/2026-10-11' } })
+      expect(textOf(result)).toBe(
+        [
+          'IC 1302 "Wawel" (IC) · Sun 2026-10-11 · ref 26/201/2026-10-11',
+          'Live: running, +7 min at Kraków Główny',
+          '06:00 Bielsko-Biała Główna pl.1 +2',
+          '10:00–10:05 Kraków Główny pl.4 tr.7',
+          '12:40 Warszawa Centralna pl.2',
+          'Disruption (Zmiana peronu): Zmiana peronu w Warszawie Centralnej.',
+        ].join('\n'),
+      )
+    })
+
+    it('trims to the requested segment and skips live data when asked', async () => {
+      const mcp = await connect({ routes })
+      const result = await mcp.callTool({
+        name: 'train_details',
+        arguments: { ref: '26/201/2026-10-11', from: 'Kraków', to: 'Warszawa', live: false },
+      })
+      expect(textOf(result).split('\n').slice(1)).toEqual([
+        '10:00–10:05 Kraków Główny pl.4 tr.7',
+        '12:40 Warszawa Centralna pl.2',
+      ])
+      expect(mcp.calls.some((c) => c.url.pathname.startsWith('/api/v1/operations'))).toBe(false)
+    })
+
+    it('checks only disruptions for a future date', async () => {
+      const mcp = await connect({ routes })
+      const result = await mcp.callTool({ name: 'train_details', arguments: { ref: '26/201/2026-10-12' } })
+      expect(textOf(result)).not.toContain('Live:')
+      expect(mcp.calls.some((c) => c.url.pathname.startsWith('/api/v1/operations'))).toBe(false)
+      expect(mcp.calls.some((c) => c.url.pathname === '/api/v1/disruptions')).toBe(true)
+    })
+
+    it('notes when a train has no live data yet', async () => {
+      const mcp = await connect({
+        routes: { ...routes, '/api/v1/operations/train/26/201/2026-10-11': () => json({}, 404) },
+      })
+      const result = await mcp.callTool({ name: 'train_details', arguments: { ref: '26/201/2026-10-11' } })
+      expect(textOf(result)).toContain('No live data for this train yet.')
+    })
+
+    it('finds a train by number via the whole-network timetable', async () => {
+      const network: RouteSpec[] = [
+        {
+          orderId: 201,
+          number: '1302',
+          dates: ['2026-10-11'],
+          stops: [
+            [33019, null, '10:05'],
+            [33605, '12:40', null],
+          ],
+        },
+        {
+          orderId: 202,
+          number: '1304',
+          dates: ['2026-10-11'],
+          stops: [
+            [33019, null, '11:05'],
+            [33605, '13:40', null],
+          ],
+        },
+      ]
+      const mcp = await connect({
+        routes: { '/api/v1/schedules/shortened': () => json(shortSchedules(network)) },
+      })
+      const result = await mcp.callTool({
+        name: 'train_details',
+        arguments: { number: 'IC 1304', live: false },
+      })
+      expect(textOf(result).split('\n')[0]).toBe('IC 1304 (IC) · Sun 2026-10-11 · ref 26/202/2026-10-11')
+      const missing = await mcp.callTool({
+        name: 'train_details',
+        arguments: { number: '9999', live: false },
+      })
+      expect(textOf(missing)).toBe('No train number 9999 runs on 2026-10-11.')
+    })
+
+    it('rejects a malformed ref', async () => {
+      const mcp = await connect()
+      const result = await mcp.callTool({ name: 'train_details', arguments: { ref: 'IC 1302' } })
+      expect(textOf(result)).toContain('Invalid ref "IC 1302"')
+    })
+  })
+
+  it('adds live delays to a station board with one request', async () => {
+    const routes: RouteSpec[] = [
+      {
+        orderId: 201,
+        number: '1302',
+        dates: ['2026-10-11'],
+        stops: [
+          [33019, null, '10:05'],
+          [33605, '12:40', null],
+        ],
+      },
+      {
+        orderId: 202,
+        number: '1304',
+        dates: ['2026-10-11'],
+        stops: [
+          [33019, null, '10:20'],
+          [33605, '13:00', null],
+        ],
+      },
+    ]
+    const operations = {
+      pagination: { hasNextPage: false },
+      trains: [
+        {
+          scheduleId: 26,
+          orderId: 201,
+          trainOrderId: 201,
+          operatingDate: '2026-10-11',
+          trainStatus: 'P',
+          stations: [{ stationId: 33019, departureDelayMinutes: 12, isConfirmed: false, isCancelled: false }],
+        },
+        {
+          scheduleId: 26,
+          orderId: 202,
+          trainOrderId: 202,
+          operatingDate: '2026-10-11',
+          trainStatus: 'X',
+          stations: [{ stationId: 33019, isConfirmed: false, isCancelled: true }],
+        },
+      ],
+    }
+    const mcp = await connect({
+      routes: {
+        '/api/v1/schedules': () => json(schedules(routes)),
+        '/api/v1/operations': () => json(operations),
+      },
+    })
+    const result = await mcp.callTool({
+      name: 'station_board',
+      arguments: { station: 'Kraków Główny', live: true },
+    })
+    expect(textOf(result).split('\n').slice(1)).toEqual([
+      '10:05 · +12 · IC 1302 (IC) · → Warszawa Centralna · ref 26/201/2026-10-11',
+      '10:20 · cancelled · IC 1304 (IC) · → Warszawa Centralna · ref 26/202/2026-10-11',
+    ])
+    const request = mcp.calls.find((c) => c.url.pathname === '/api/v1/operations')?.url.searchParams
+    expect(request?.get('stations')).toBe('33019')
+    expect(request?.get('withPlanned')).toBe('true')
   })
 })

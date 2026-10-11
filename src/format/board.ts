@@ -1,4 +1,4 @@
-import { tripRef } from '../data/trips.ts'
+import { type Stop, type Trip, tripRef } from '../data/trips.ts'
 import type { BoardEntry, BoardType } from '../planner/board.ts'
 import { formatClock, formatDate } from '../time.ts'
 import { placeLabel } from './connections.ts'
@@ -13,6 +13,8 @@ export interface BoardView {
   total: number
   hint: string | undefined
   nameOf: NameOf
+  /** Live delay at the stop ("+7", "cancelled"), when live data was requested. */
+  delayOf?: ((trip: Trip, stop: Stop) => string) | undefined
 }
 
 /**
@@ -31,6 +33,7 @@ export function formatBoard(v: BoardView): string {
     lines.push(
       [
         formatClock(e.time),
+        v.delayOf?.(e.trip, e.stop) ?? '',
         v.isCity ? v.nameOf(e.stop.stationId) : '',
         trainLabel(e.trip, e.stop),
         e.endpointId === undefined ? '' : `${arrow} ${v.nameOf(e.endpointId)}`,

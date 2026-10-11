@@ -1,4 +1,4 @@
-import { tripRef } from '../data/trips.ts'
+import { type Stop, type Trip, tripRef } from '../data/trips.ts'
 import type { Journey, Leg } from '../planner/types.ts'
 import { formatClock, formatDate, formatDuration } from '../time.ts'
 import { type NameOf, platformLabel, trainLabel } from './trains.ts'
@@ -16,6 +16,8 @@ export interface ConnectionsView {
   withTransfers: boolean
   hint: string | undefined
   nameOf: NameOf
+  /** Live delay at a departure stop ("+7", "cancelled"), when live data was requested. */
+  delayOf?: ((trip: Trip, stop: Stop) => string) | undefined
 }
 
 /**
@@ -62,6 +64,7 @@ function directLine(v: ConnectionsView, leg: Leg): string {
     .join(' ')
   return [
     `${formatClock(leg.dep)}→${formatClock(leg.arr)} ${formatDuration(leg.arr - leg.dep)}`,
+    v.delayOf?.(leg.trip, leg.from) ?? '',
     trainLabel(leg.trip, leg.from),
     from || to ? `${from || '·'} → ${to || '·'}` : '',
     `ref ${tripRef(leg.trip)}`,
@@ -77,7 +80,8 @@ function transferLines(v: ConnectionsView, journey: Journey): string[] {
     const boarding = i === 0 && v.fromIsCity ? `${v.nameOf(leg.from.stationId)} ` : ''
     const depPlatform = platformLabel(leg.from.depPlatform, leg.from.depTrack)
     const arrPlatform = platformLabel(leg.to.arrPlatform, leg.to.arrTrack)
-    return `  ${boarding}${formatClock(leg.dep)} ${trainLabel(leg.trip, leg.from)}${depPlatform ? ` ${depPlatform}` : ''} → ${v.nameOf(leg.to.stationId)} ${formatClock(leg.arr)}${arrPlatform ? ` ${arrPlatform}` : ''} · ref ${tripRef(leg.trip)}`
+    const delay = v.delayOf?.(leg.trip, leg.from)
+    return `  ${boarding}${formatClock(leg.dep)}${delay ? ` ${delay}` : ''} ${trainLabel(leg.trip, leg.from)}${depPlatform ? ` ${depPlatform}` : ''} → ${v.nameOf(leg.to.stationId)} ${formatClock(leg.arr)}${arrPlatform ? ` ${arrPlatform}` : ''} · ref ${tripRef(leg.trip)}`
   })
   return [summary, ...legs]
 }

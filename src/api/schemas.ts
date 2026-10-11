@@ -142,3 +142,60 @@ export function expandShortSchedules(body: unknown): SchedulesJson {
     dictionaries: null,
   }
 }
+
+const operationStation = z.object({
+  stationId: z.number().int(),
+  plannedSequenceNumber: z.number().int().nullish(),
+  actualSequenceNumber: z.number().int().nullish(),
+  plannedArrival: z.string().nullish(),
+  plannedDeparture: z.string().nullish(),
+  arrivalDelayMinutes: z.number().int().nullish(),
+  departureDelayMinutes: z.number().int().nullish(),
+  actualArrival: z.string().nullish(),
+  actualDeparture: z.string().nullish(),
+  isConfirmed: z.boolean().nullish(),
+  isCancelled: z.boolean().nullish(),
+})
+
+export const trainOperation = z.object({
+  scheduleId: z.number().int(),
+  orderId: z.number().int(),
+  trainOrderId: z.number().int().nullish(),
+  operatingDate: z.string(),
+  trainStatus: z.string().nullish(),
+  stations: z.array(operationStation).nullish(),
+})
+
+export const operationsResponse = z.object({
+  pagination: z.object({ hasNextPage: z.boolean().nullish() }).nullish(),
+  trains: z.array(trainOperation).nullish(),
+})
+
+export const disruptionsResponse = z.object({
+  disruptions: z
+    .array(
+      z.object({
+        disruptionId: z.number(),
+        disruptionTypeCode: z.string().nullish(),
+        startStationId: z.number().int().nullish(),
+        endStationId: z.number().int().nullish(),
+        message: z.string().nullish(),
+        affectedRoutes: z
+          .array(
+            z.object({
+              scheduleId: z.number().int(),
+              orderId: z.number().int(),
+              trainOrderId: z.number().int().nullish(),
+              operatingDate: z.string(),
+              stationId: z.number().int().nullish(),
+            }),
+          )
+          .nullish(),
+      }),
+    )
+    .nullish(),
+  disruptionTypes: z.record(z.string(), z.string()).nullish(),
+})
+
+export type TrainOperationJson = z.infer<typeof trainOperation>
+export type DisruptionsJson = z.infer<typeof disruptionsResponse>

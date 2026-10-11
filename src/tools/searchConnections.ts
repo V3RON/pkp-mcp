@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import type { Stop, Trip } from '../data/trips.ts'
 import { UserError } from '../errors.ts'
 import { formatConnections, placeLabel } from '../format/connections.ts'
 import { takeWholeMinutes } from '../format/trains.ts'
@@ -18,9 +19,11 @@ import {
   clockParam,
   dateParam,
   distinct,
+  liveParam,
   parseDate,
   parseTime,
 } from './inputs.ts'
+import { liveDateOk, liveLabels } from './live.ts'
 
 export function registerSearchConnections(server: McpServer, ctx: Context): void {
   server.registerTool(
@@ -47,6 +50,7 @@ export function registerSearchConnections(server: McpServer, ctx: Context): void
         carriers: carriersParam,
         sort: z.enum(['departure', 'duration']).optional().describe('Default departure'),
         limit: z.number().int().min(1).max(10).optional().describe('Default 5'),
+        live: liveParam,
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
@@ -72,6 +76,7 @@ interface Input {
   carriers?: string[] | undefined
   sort?: 'departure' | 'duration' | undefined
   limit?: number | undefined
+  live?: boolean | undefined
 }
 
 /** How results are picked from the candidates. */
@@ -171,6 +176,15 @@ async function searchConnections(ctx: Context, input: Input): Promise<string> {
   }
 
   const { shown, hint } = select(candidates, selection, limit, transfers?.more)
+  let delayOf: ((trip: Trip, stop: Stop) => string) | undefined
+  if (input.live) {
+    if (liveDateOk(date, today.date)) {
+      const boarding = shown.flatMap((j) => j.legs.map((l) => l.from.stationId))
+      const live = await liveLabels(ctx, boarding, 'dep')
+      delayOf = live.delayOf
+      if (live.note) notes.unshift(live.note)
+    } else notes.unshift(m.liveOnlyRecent)
+  }
   const body = formatConnections({
     fromLabel: from.name,
     toLabel: to.name,
@@ -182,6 +196,7 @@ async function searchConnections(ctx: Context, input: Input): Promise<string> {
     withTransfers: transfers !== undefined,
     hint,
     nameOf,
+    delayOf,
   })
   return [body, ...notes].join('\n')
 }

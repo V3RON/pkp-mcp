@@ -10,6 +10,7 @@ export const categoriesParam = z
   .array(z.string())
   .optional()
   .describe('Train categories, e.g. ["EIP","EIC","IC","TLK"] or regional ["R","KM","KS"]')
+export const liveParam = z.boolean().optional().describe('Add live delays (today only), default false')
 export const carriersParam = z.array(z.string()).optional().describe('Carrier codes, e.g. ["IC","PR","KM"]')
 
 export function parseDate(value: string | undefined, today: string): string {

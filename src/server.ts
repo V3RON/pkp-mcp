@@ -3,6 +3,7 @@ import type { Context } from './tools/context.ts'
 import { registerFindStation } from './tools/findStation.ts'
 import { registerSearchConnections } from './tools/searchConnections.ts'
 import { registerStationBoard } from './tools/stationBoard.ts'
+import { registerTrainDetails } from './tools/trainDetails.ts'
 
 export const SERVER_NAME = 'pkp-mcp'
 export const SERVER_VERSION = '0.1.0'
@@ -18,6 +19,7 @@ export function createServer(ctx: Context): McpServer {
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { instructions: INSTRUCTIONS })
   registerSearchConnections(server, ctx)
   registerStationBoard(server, ctx)
+  registerTrainDetails(server, ctx)
   registerFindStation(server, ctx)
   return server
 }

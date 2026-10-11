@@ -23,6 +23,17 @@ export const messages = {
   knownCarriers: (values: string[]) => `Carriers here: ${values.join(', ')}.`,
   moreAfter: (param: string, time: string) => `More: ${param}=${time}`,
   moreBefore: (time: string) => `Earlier: arrive_before=${time}`,
+  badRef: (ref: string) =>
+    `Invalid ref "${ref}". Use a ref from search_connections or station_board, e.g. 26/171034/2026-10-12.`,
+  needTrain: 'Give either a ref from another tool, or a train number (with date).',
+  trainNotRunning: (ref: string) => `Train ${ref} does not run on that date.`,
+  trainNotFound: (number: string, date: string) => `No train number ${number} runs on ${date}.`,
+  trainAmbiguous: (number: string, options: string[]) =>
+    `Several trains have number ${number}; pass one ref:\n${options.join('\n')}`,
+  liveSkippedBudget: 'Live data skipped to save API quota.',
+  liveUnavailable: 'Live data is unavailable right now.',
+  liveNotTracked: 'No live data for this train yet.',
+  liveOnlyRecent: 'Live data exists only for today and yesterday.',
   missingKey: (signupUrl: string) =>
     `PKP_API_KEY is not set. Request a free key at ${signupUrl} and add it to the MCP server's env.`,
   invalidKey: (signupUrl: string) =>
