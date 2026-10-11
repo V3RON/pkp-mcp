@@ -1,0 +1,25 @@
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Secrets: never commit API keys
+.env
+.env.*
+!.env.example
+*.key
+
+# Local cache (if PKP_MCP_CACHE_DIR points inside the repo)
+.cache/
+*.db
+*.db-wal
+*.db-shm
+
+# Local planning notes
+PLAN.md
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
