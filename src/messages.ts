@@ -12,6 +12,9 @@ export const messages = {
   samePlace: (name: string) => `Origin and destination are the same place (${name}).`,
   noDirect: (from: string, to: string, date: string, window: string) =>
     `No direct trains ${from} → ${to} on ${date}${window}.`,
+  noConnections: (from: string, to: string, date: string, window: string, maxTransfers: number) =>
+    `No connections ${from} → ${to} on ${date}${window} with up to ${maxTransfers} ${maxTransfers === 1 ? 'change' : 'changes'}.`,
+  transfersUnavailable: (reason: string) => `(Showing direct trains only: transfer search failed: ${reason})`,
   noBoard: (station: string, type: string, date: string, window: string) =>
     `No ${type} at ${station} on ${date}${window}.`,
   windowFrom: (time: string) => ` after ${time}`,

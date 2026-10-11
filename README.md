@@ -3,13 +3,13 @@
 A local [MCP](https://modelcontextprotocol.io) server for Polish train timetables, built on the
 [PKP PLK Open Data API](https://pdp-api.plk-sa.pl/). Works with Claude Code and Codex.
 
-> Work in progress. Coming next: connections with transfers and live train details.
+> Work in progress. Coming next: live train details (delays, cancellations, disruptions).
 
 ## Tools
 
 | Tool | What it does |
 |---|---|
-| `search_connections` | Direct trains between two stations or cities on a date, with time window, category, carrier and sort options |
+| `search_connections` | Trains between two stations or cities on a date, including up to 2 changes, with time window, minimum change time, category, carrier and sort options |
 | `station_board` | Departures or arrivals at a station or city |
 | `find_station` | Station and city lookup (other tools accept names directly) |
 
@@ -50,7 +50,8 @@ env = { PKP_API_KEY = "<your key>" }
 tool_timeout_sec = 120
 ```
 
-Codex starts MCP servers with a minimal environment, so the key must be set in `env` here.
+Codex starts MCP servers with a minimal environment, so the key must be set in `env` here. The longer
+tool timeout covers the first search with changes on a given date, which downloads that day's full timetable.
 
 Keep the key in these client config files (they live in your home directory) or in a local `.env`
 (git-ignored). Never commit it.
@@ -73,6 +74,8 @@ not use up the request quota:
 - the station and city catalogue (2 requests) is kept for 30 days;
 - each origin/destination pair or station board costs 1 request per date, reused until the published
   timetable changes (checked at most once an hour);
+- journeys with changes need the whole network's timetable for the date: one larger request (tens of MB),
+  made only when direct trains are not enough; after that every search for that date is answered locally;
 - filters and time windows are applied locally, so asking the same question differently is free;
 - if the API is unreachable, older cached data is served with a note.
 

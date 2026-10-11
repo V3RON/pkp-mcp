@@ -26,7 +26,7 @@ const direct = (routes: RouteSpec[], extra: Partial<Parameters<typeof findDirect
     arriveBefore: undefined,
     filter: makeFilter(),
     ...extra,
-  }).map((j) => `${formatClock(j.dep)}→${formatClock(j.arr)} ${j.trip.number}`)
+  }).map((j) => `${formatClock(j.dep)}→${formatClock(j.arr)} ${j.legs[0]?.trip.number}`)
 
 describe('toTimetable', () => {
   it('expands routes into one trip per requested operating date', () => {
@@ -99,7 +99,9 @@ describe('findDirect', () => {
         filter: makeFilter(),
       },
     )
-    expect(result.map((j) => [j.from.stationId, j.to.stationId, j.dep, j.arr])).toEqual([[3, 9, 376, 519]])
+    expect(result.map((j) => [j.legs[0]?.from.stationId, j.legs[0]?.to.stationId, j.dep, j.arr])).toEqual([
+      [3, 9, 376, 519],
+    ])
   })
 
   it('ignores trains going the other way and technical stops', () => {

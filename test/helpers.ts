@@ -85,3 +85,39 @@ function timeFields(kind: 'arrival' | 'departure', value: string | null) {
 export function schedules(routes: RouteSpec[]) {
   return { generatedAt: '2026-10-11T12:00:00Z', routes: routes.map(apiRoute), dictionaries: {} }
 }
+
+/** The same routes in the /schedules/shortened shape (abbreviated keys). */
+export function shortSchedules(routes: RouteSpec[]) {
+  const short: Record<string, string> = {
+    stationId: 'id',
+    orderNumber: 'ord',
+    arrivalTime: 'atm',
+    arrivalDay: 'ady',
+    arrivalPlatform: 'apl',
+    arrivalTrack: 'atr',
+    arrivalTrainNumber: 'atn',
+    arrivalCommercialCategory: 'acc',
+    departureTime: 'dtm',
+    departureDay: 'ddy',
+    departurePlatform: 'dpl',
+    departureTrack: 'dtr',
+    departureTrainNumber: 'dtn',
+    departureCommercialCategory: 'dcc',
+    stopTypeId: 'sti',
+    stopTypeName: 'stn',
+  }
+  return {
+    ts: '2026-10-11T12:00:00Z',
+    rt: routes.map(apiRoute).map((r) => ({
+      sid: r.scheduleId,
+      oid: r.orderId,
+      toid: r.trainOrderId,
+      nm: r.name,
+      cc: r.carrierCode,
+      nn: r.nationalNumber,
+      ccs: r.commercialCategorySymbol,
+      od: r.operatingDates,
+      st: r.stations.map((s) => Object.fromEntries(Object.entries(s).map(([k, v]) => [short[k] ?? k, v]))),
+    })),
+  }
+}

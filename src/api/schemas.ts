@@ -73,3 +73,72 @@ export const schedulesResponse = z.object({
 
 export type RouteJson = z.infer<typeof route>
 export type SchedulesJson = z.infer<typeof schedulesResponse>
+
+/** `/schedules/shortened`: same data with abbreviated keys (much smaller for the whole network). */
+const shortStop = z.object({
+  id: z.number().int(),
+  ord: z.number().int().nullish(),
+  atm: z.string().nullish(),
+  ady: z.number().int().nullish(),
+  apl: z.string().nullish(),
+  atr: z.string().nullish(),
+  atn: z.string().nullish(),
+  acc: z.string().nullish(),
+  dtm: z.string().nullish(),
+  ddy: z.number().int().nullish(),
+  dpl: z.string().nullish(),
+  dtr: z.string().nullish(),
+  dtn: z.string().nullish(),
+  dcc: z.string().nullish(),
+  sti: z.number().int().nullish(),
+  stn: z.string().nullish(),
+})
+
+const shortRoute = z.object({
+  sid: z.number().int(),
+  oid: z.number().int(),
+  toid: z.number().int().nullish(),
+  nm: z.string().nullish(),
+  cc: z.string().nullish(),
+  nn: z.string().nullish(),
+  ccs: z.string().nullish(),
+  od: z.array(z.string()).nullish(),
+  st: z.array(shortStop).nullish(),
+})
+
+export const shortSchedulesResponse = z.object({ rt: z.array(shortRoute).nullish() })
+
+/** Maps the shortened response onto the full-name shape so one parser serves both. */
+export function expandShortSchedules(body: unknown): SchedulesJson {
+  return {
+    routes: (shortSchedulesResponse.parse(body).rt ?? []).map((r) => ({
+      scheduleId: r.sid,
+      orderId: r.oid,
+      trainOrderId: r.toid,
+      name: r.nm,
+      carrierCode: r.cc,
+      nationalNumber: r.nn,
+      commercialCategorySymbol: r.ccs,
+      operatingDates: r.od,
+      stations: r.st?.map((s) => ({
+        stationId: s.id,
+        orderNumber: s.ord,
+        arrivalTime: s.atm,
+        arrivalDay: s.ady,
+        arrivalPlatform: s.apl,
+        arrivalTrack: s.atr,
+        arrivalTrainNumber: s.atn,
+        arrivalCommercialCategory: s.acc,
+        departureTime: s.dtm,
+        departureDay: s.ddy,
+        departurePlatform: s.dpl,
+        departureTrack: s.dtr,
+        departureTrainNumber: s.dtn,
+        departureCommercialCategory: s.dcc,
+        stopTypeId: s.sti,
+        stopTypeName: s.stn,
+      })),
+    })),
+    dictionaries: null,
+  }
+}

@@ -29,7 +29,10 @@ function setup() {
     return { n: fetches }
   }
   return {
-    get: () => cache.get('k', now + 48 * HOUR, fetcher),
+    get: async () => {
+      const { value, staleSince } = await cache.get('k', now + 48 * HOUR, fetcher, (body) => body)
+      return { body: value, staleSince }
+    },
     fetches: () => fetches,
     versionChecks: () => fake.calls.length,
     advance: (ms: number) => (now += ms),
@@ -42,30 +45,28 @@ describe('ScheduleCache', () => {
   it('reuses an entry for an hour without any request', async () => {
     const s = setup()
     await s.get()
+    const checks = s.versionChecks()
     s.advance(HOUR - 1)
     expect((await s.get()).body).toEqual({ n: 1 })
     expect(s.fetches()).toBe(1)
-    expect(s.versionChecks()).toBe(0)
+    expect(s.versionChecks()).toBe(checks)
   })
 
-  it('after an hour, keeps the entry if the timetable version is unchanged', async () => {
+  it('after an hour, keeps the entry while the timetable version is unchanged', async () => {
     const s = setup()
-    await s.get() // stores version unknown → first check below records v1
+    await s.get() // tagged with v1, looked up before the download
     s.advance(2 * HOUR)
-    await s.get() // version check (v1) differs from stored null → refetch, now stored with v1
-    s.advance(2 * HOUR)
-    expect((await s.get()).body).toEqual({ n: 2 })
+    expect((await s.get()).body).toEqual({ n: 1 })
+    expect(s.fetches()).toBe(1)
     expect(s.versionChecks()).toBe(2)
   })
 
   it('refetches when the timetable version changes', async () => {
     const s = setup()
     await s.get()
-    s.advance(2 * HOUR)
-    await s.get()
     s.setVersion('v2')
     s.advance(2 * HOUR)
-    expect((await s.get()).body).toEqual({ n: 3 })
+    expect((await s.get()).body).toEqual({ n: 2 })
   })
 
   it('refetches after a day regardless of version', async () => {

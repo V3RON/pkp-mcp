@@ -1,15 +1,7 @@
 import { offsetTo, type Stop, type Trip } from '../data/trips.ts'
 import { DAY_MIN } from '../time.ts'
 import { passes, type TrainFilter } from './filters.ts'
-
-export interface DirectJourney {
-  trip: Trip
-  from: Stop
-  to: Stop
-  /** Minutes since 00:00 of the search date. */
-  dep: number
-  arr: number
-}
+import { type Journey, journeyOf } from './types.ts'
 
 export interface DirectQuery {
   fromIds: Set<number>
@@ -25,8 +17,8 @@ export interface DirectQuery {
  * the origin (a city), it is boarded at the last of them and left at the first station of the
  * destination: the shortest ride between the two places, with the station named in the output.
  */
-export function findDirect(trips: Trip[], q: DirectQuery): DirectJourney[] {
-  const journeys: DirectJourney[] = []
+export function findDirect(trips: Trip[], q: DirectQuery): Journey[] {
+  const journeys: Journey[] = []
   for (const trip of trips) {
     const leg = boardingLeg(trip.stops, q.fromIds, q.toIds)
     if (!leg) continue
@@ -38,7 +30,7 @@ export function findDirect(trips: Trip[], q: DirectQuery): DirectJourney[] {
     if (q.departAfter !== undefined && dep < q.departAfter) continue
     if (q.arriveBefore !== undefined && arr > q.arriveBefore) continue
     if (!passes(q.filter, trip, from)) continue
-    journeys.push({ trip, from, to, dep, arr })
+    journeys.push(journeyOf([{ trip, from, to, dep, arr }]))
   }
   return journeys.sort((a, b) => a.dep - b.dep || a.arr - b.arr)
 }

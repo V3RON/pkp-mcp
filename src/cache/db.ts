@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite'
  * Bump on any schema change. Everything here can be re-fetched from the API, so a version
  * mismatch simply drops and recreates the tables instead of migrating them.
  */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 const SCHEMA = `
   CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -18,7 +18,7 @@ const SCHEMA = `
     fetched_at INTEGER NOT NULL,
     expires_at INTEGER NOT NULL,
     version TEXT,
-    body TEXT NOT NULL
+    body BLOB NOT NULL
   );
   CREATE TABLE requests (key_hash TEXT NOT NULL, at INTEGER NOT NULL);
   CREATE INDEX requests_by_key ON requests (key_hash, at);

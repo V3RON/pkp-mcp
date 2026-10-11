@@ -3,9 +3,12 @@ import { z } from 'zod'
 import { UserError } from '../errors.ts'
 import { formatConnections, placeLabel } from '../format/connections.ts'
 import { takeWholeMinutes } from '../format/trains.ts'
+import { log, redact } from '../log.ts'
 import { messages as m } from '../messages.ts'
+import { searchTransfers } from '../planner/csa.ts'
 import { findDirect } from '../planner/direct.ts'
 import { makeFilter } from '../planner/filters.ts'
+import type { Journey } from '../planner/types.ts'
 import { formatClock, formatDate, formatWarsawDateTime, warsawNow } from '../time.ts'
 import type { Context } from './context.ts'
 import { text, toolError } from './errors.ts'
@@ -25,13 +28,21 @@ export function registerSearchConnections(server: McpServer, ctx: Context): void
     {
       title: 'Search train connections',
       description:
-        'Find direct trains between two Polish stations or cities on a date. City names cover all their stations.',
+        'Find trains between two Polish stations or cities on a date, including changes. City names cover all their stations.',
       inputSchema: {
         from: z.string().min(1).describe('Origin station or city'),
         to: z.string().min(1).describe('Destination station or city'),
         date: dateParam,
         depart_after: clockParam('default now when date is today'),
         arrive_before: clockParam('optional'),
+        max_transfers: z.number().int().min(0).max(2).optional().describe('Default 1; 0 = direct only'),
+        min_transfer_min: z
+          .number()
+          .int()
+          .min(0)
+          .max(60)
+          .optional()
+          .describe('Minimum change time, default 5'),
         categories: categoriesParam,
         carriers: carriersParam,
         sort: z.enum(['departure', 'duration']).optional().describe('Default departure'),
@@ -55,11 +66,16 @@ interface Input {
   date?: string | undefined
   depart_after?: string | undefined
   arrive_before?: string | undefined
+  max_transfers?: number | undefined
+  min_transfer_min?: number | undefined
   categories?: string[] | undefined
   carriers?: string[] | undefined
   sort?: 'departure' | 'duration' | undefined
   limit?: number | undefined
 }
+
+/** How results are picked from the candidates. */
+type Selection = 'next' | 'latestBefore' | 'fastest'
 
 async function searchConnections(ctx: Context, input: Input): Promise<string> {
   const today = warsawNow(ctx.now())
@@ -69,57 +85,92 @@ async function searchConnections(ctx: Context, input: Input): Promise<string> {
   // Today, trains that already left are never useful, even when only arrive_before is given.
   if (departAfter === undefined && date === today.date) departAfter = today.minutes
   const limit = input.limit ?? 5
+  const maxTransfers = input.max_transfers ?? 1
+  const selection: Selection =
+    input.sort === 'duration'
+      ? 'fastest'
+      : arriveBefore !== undefined && input.depart_after === undefined
+        ? 'latestBefore'
+        : 'next'
 
   const [from, to] = await Promise.all([ctx.places.resolve(input.from), ctx.places.resolve(input.to)])
   const toIds = new Set(to.stationIds)
   if (from.stationIds.every((id) => toIds.has(id))) throw new UserError(m.samePlace(from.name))
-
-  const timetable = await ctx.timetables.between(from.stationIds, to.stationIds, date)
-  const query = { fromIds: new Set(from.stationIds), toIds, date, departAfter, arriveBefore }
   const filter = makeFilter(input.categories, input.carriers)
-  let journeys = findDirect(timetable.trips, { ...query, filter })
-  const nameOf = (id: number) => ctx.places.stationName(id) ?? timetable.stationNames.get(id) ?? `#${id}`
-  const staleSince = timetable.staleSince ?? from.staleSince ?? to.staleSince
-  const staleLine = staleSince === undefined ? [] : [m.staleNote(formatWarsawDateTime(staleSince))]
+  const window = { departAfter, arriveBefore }
+  const notes: string[] = []
+  let staleSince = from.staleSince ?? to.staleSince
 
-  if (journeys.length === 0) {
-    const window = [
+  // 1. Direct trains: one small request per pair and date. Skipped when the whole network is cached anyway.
+  let direct:
+    | { journeys: Journey[]; unfiltered: () => Journey[]; nameOf: (id: number) => string | undefined }
+    | undefined
+  if (maxTransfers === 0 || !(await ctx.timetables.networkReady(date))) {
+    const timetable = await ctx.timetables.between(from.stationIds, to.stationIds, date)
+    staleSince ??= timetable.staleSince
+    const query = { fromIds: new Set(from.stationIds), toIds, date, ...window }
+    direct = {
+      journeys: findDirect(timetable.trips, { ...query, filter }),
+      unfiltered: () => findDirect(timetable.trips, { ...query, filter: makeFilter() }),
+      nameOf: (id) => timetable.stationNames.get(id),
+    }
+  }
+
+  // 2. Changes: one large request per date, then free. Only fetched when direct trains do not suffice.
+  let transfers: { journeys: Journey[]; more: boolean } | undefined
+  if (maxTransfers > 0 && (!direct || direct.journeys.length < limit)) {
+    try {
+      const { network, staleSince: networkStale } = await ctx.timetables.network(date)
+      staleSince ??= networkStale
+      transfers = searchTransfers(network, {
+        fromIds: from.stationIds,
+        toIds: to.stationIds,
+        departAfter: departAfter ?? 0,
+        arriveBefore,
+        maxTransfers,
+        minTransferMin: input.min_transfer_min ?? 5,
+        filter,
+        limit,
+        exhaustive: selection !== 'next',
+      })
+    } catch (error) {
+      if (!direct) throw error
+      log.warn('transfer search failed; showing direct trains only', error)
+      notes.push(m.transfersUnavailable(redact(error instanceof Error ? error.message : String(error))))
+    }
+  }
+
+  const nameOf = (id: number) => ctx.places.stationName(id) ?? direct?.nameOf(id) ?? `#${id}`
+  const candidates = transfers?.journeys ?? direct?.journeys ?? []
+  if (staleSince !== undefined) notes.push(m.staleNote(formatWarsawDateTime(staleSince)))
+
+  if (candidates.length === 0) {
+    const windowText = [
       departAfter === undefined ? '' : m.windowFrom(formatClock(departAfter)),
       arriveBefore === undefined ? '' : m.windowUntil(formatClock(arriveBefore)),
     ].join('')
+    const fromLabel = placeLabel(from.name, from.isCity)
+    const toLabel = placeLabel(to.name, to.isCity)
     const lines = [
-      m.noDirect(
-        placeLabel(from.name, from.isCity),
-        placeLabel(to.name, to.isCity),
-        formatDate(date),
-        window,
-      ),
+      transfers
+        ? m.noConnections(fromLabel, toLabel, formatDate(date), windowText, maxTransfers)
+        : m.noDirect(fromLabel, toLabel, formatDate(date), windowText),
     ]
-    if (filter.categories || filter.carriers) {
-      const unfiltered = findDirect(timetable.trips, { ...query, filter: makeFilter() })
+    if (direct && (filter.categories || filter.carriers)) {
+      const unfiltered = direct.unfiltered()
       if (filter.categories)
-        lines.push(m.knownCategories(distinct(unfiltered.map((j) => j.from.category ?? j.trip.category))))
-      if (filter.carriers) lines.push(m.knownCarriers(distinct(unfiltered.map((j) => j.trip.carrier))))
+        lines.push(
+          m.knownCategories(
+            distinct(unfiltered.flatMap((j) => j.legs.map((l) => l.from.category ?? l.trip.category))),
+          ),
+        )
+      if (filter.carriers)
+        lines.push(m.knownCarriers(distinct(unfiltered.flatMap((j) => j.legs.map((l) => l.trip.carrier)))))
     }
-    return [...lines, ...staleLine].join('\n')
+    return [...lines, ...notes].join('\n')
   }
 
-  let shown: typeof journeys
-  let hint: string | undefined
-  if (input.sort === 'duration') {
-    journeys = [...journeys].sort((a, b) => a.arr - a.dep - (b.arr - b.dep) || a.dep - b.dep)
-    shown = journeys.slice(0, limit)
-  } else if (arriveBefore !== undefined && input.depart_after === undefined) {
-    // Only an arrival deadline: the most useful trains are the last ones that make it.
-    shown = journeys.slice(-limit)
-    const first = shown[0]
-    if (first && shown.length < journeys.length) hint = m.moreBefore(formatClock(first.arr - 1))
-  } else {
-    shown = takeWholeMinutes(journeys, limit, (j) => j.dep)
-    const last = shown[shown.length - 1]
-    if (last && shown.length < journeys.length) hint = m.moreAfter('depart_after', formatClock(last.dep + 1))
-  }
-
+  const { shown, hint } = select(candidates, selection, limit, transfers?.more)
   const body = formatConnections({
     fromLabel: from.name,
     toLabel: to.name,
@@ -127,9 +178,35 @@ async function searchConnections(ctx: Context, input: Input): Promise<string> {
     toIsCity: to.isCity,
     date,
     shown,
-    total: journeys.length,
+    total: transfers ? undefined : candidates.length,
+    withTransfers: transfers !== undefined,
     hint,
     nameOf,
   })
-  return [body, ...staleLine].join('\n')
+  return [body, ...notes].join('\n')
+}
+
+/** `candidates` are sorted by departure. `more` tells whether a partial (non-exhaustive) list was cut. */
+function select(
+  candidates: Journey[],
+  selection: Selection,
+  limit: number,
+  more: boolean | undefined,
+): { shown: Journey[]; hint: string | undefined } {
+  if (selection === 'fastest') {
+    const fastest = [...candidates].sort((a, b) => a.arr - a.dep - (b.arr - b.dep) || a.dep - b.dep)
+    return { shown: fastest.slice(0, limit), hint: undefined }
+  }
+  if (selection === 'latestBefore') {
+    // Only an arrival deadline: the most useful journeys are the last ones that make it.
+    const shown = candidates.slice(-limit)
+    const first = shown[0]
+    const hint =
+      first && shown.length < candidates.length ? m.moreBefore(formatClock(first.arr - 1)) : undefined
+    return { shown, hint }
+  }
+  const shown = more === undefined ? takeWholeMinutes(candidates, limit, (j) => j.dep) : candidates
+  const last = shown[shown.length - 1]
+  const cut = more ?? shown.length < candidates.length
+  return { shown, hint: last && cut ? m.moreAfter('depart_after', formatClock(last.dep + 1)) : undefined }
 }

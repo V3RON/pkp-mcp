@@ -8,7 +8,15 @@ import { Places } from '../src/data/places.ts'
 import { Timetables } from '../src/data/timetables.ts'
 import { DataVersion } from '../src/data/version.ts'
 import { createServer } from '../src/server.ts'
-import { catalogueRoutes, fakeFetch, json, noSleep, type RouteSpec, schedules } from './helpers.ts'
+import {
+  catalogueRoutes,
+  fakeFetch,
+  json,
+  noSleep,
+  type RouteSpec,
+  schedules,
+  shortSchedules,
+} from './helpers.ts'
 
 // Sunday 2026-10-11, 10:00 in Warsaw.
 const NOW = Date.parse('2026-10-11T08:00:00Z')
@@ -208,7 +216,13 @@ describe('MCP server', () => {
     const mcp = await connect({ routes: { '/api/v1/schedules': () => json(schedules(routes)) } })
     const result = await mcp.callTool({
       name: 'search_connections',
-      arguments: { from: 'Kraków Główny', to: 'Warszawa Centralna', date: '2026-10-12', categories: ['EIP'] },
+      arguments: {
+        from: 'Kraków Główny',
+        to: 'Warszawa Centralna',
+        date: '2026-10-12',
+        categories: ['EIP'],
+        max_transfers: 0,
+      },
     })
     expect(textOf(result)).toBe(
       [
@@ -297,5 +311,80 @@ describe('MCP server', () => {
     })
     const result = await mcp.callTool({ name: 'station_board', arguments: { station: 'Kraków Główny' } })
     expect(textOf(result)).toContain('11:02 · IC 5 (IC) · ref 26/1/2026-10-11')
+  })
+
+  it('adds journeys with changes from the whole-network timetable when direct trains are too few', async () => {
+    // Bielsko-Biała Główna (60111) → Łódź Kaliska (38661): no direct train; change at Kraków Główny (33019).
+    const network: RouteSpec[] = [
+      {
+        orderId: 301,
+        category: 'R',
+        carrier: 'KS',
+        number: '40101',
+        dates: ['2026-10-11'],
+        stops: [
+          [60111, null, '11:00', { departurePlatform: '1' }],
+          [33019, '12:50', null, { arrivalPlatform: '2' }],
+        ],
+      },
+      {
+        orderId: 302,
+        category: 'TLK',
+        number: '18100',
+        dates: ['2026-10-11'],
+        stops: [
+          [33019, null, '13:10', { departurePlatform: '4' }],
+          [38661, '16:20', null],
+        ],
+      },
+      // Too tight a change (3 min) for the default 5-minute minimum.
+      {
+        orderId: 303,
+        number: '18102',
+        dates: ['2026-10-11'],
+        stops: [
+          [33019, null, '12:53'],
+          [38661, '15:50', null],
+        ],
+      },
+    ]
+    const mcp = await connect({
+      routes: {
+        '/api/v1/schedules': () => json(schedules([])),
+        '/api/v1/schedules/shortened': () => json(shortSchedules(network)),
+      },
+    })
+    const args = { from: 'Bielsko-Biała Główna', to: 'Łódź Kaliska' }
+    const result = await mcp.callTool({ name: 'search_connections', arguments: args })
+    expect(textOf(result)).toBe(
+      [
+        'Bielsko-Biała Główna → Łódź Kaliska · Sun 2026-10-11 · 1 option',
+        '11:00→16:20 5h20 · 1 change: Kraków Główny',
+        '  11:00 R 40101 (KS) pl.1 → Kraków Główny 12:50 pl.2 · ref 26/301/2026-10-11',
+        '  13:10 TLK 18100 (IC) pl.4 → Łódź Kaliska 16:20 · ref 26/302/2026-10-11',
+      ].join('\n'),
+    )
+    const network1 = mcp.calls.find((c) => c.url.pathname === '/api/v1/schedules/shortened')?.url.searchParams
+    expect(Object.fromEntries(network1 ?? [])).toEqual({
+      dateFrom: '2026-10-10',
+      dateTo: '2026-10-11',
+      dictionaries: 'false',
+      fullRoute: 'true',
+    })
+
+    // With a 2-minute minimum the tighter change becomes possible and arrives earlier.
+    const tight = await mcp.callTool({
+      name: 'search_connections',
+      arguments: { ...args, min_transfer_min: 2 },
+    })
+    expect(textOf(tight)).toContain('11:00→15:50 4h50 · 1 change: Kraków Główny')
+
+    // Once the network is cached, later searches for that date make no requests at all.
+    const before = mcp.calls.length
+    await mcp.callTool({
+      name: 'search_connections',
+      arguments: { from: 'Kraków Główny', to: 'Łódź Kaliska' },
+    })
+    expect(mcp.calls.length).toBe(before)
   })
 })
