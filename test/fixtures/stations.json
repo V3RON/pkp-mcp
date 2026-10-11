@@ -1,0 +1,22 @@
+{
+  "generatedAt": "2026-10-11T12:00:00Z",
+  "stations": [
+    { "id": 33605, "name": "Warszawa Centralna" },
+    { "id": 33506, "name": "Warszawa Wschodnia" },
+    { "id": 34868, "name": "Warszawa Zachodnia" },
+    { "id": 34587, "name": "Warszawa Gdańska" },
+    { "id": 33019, "name": "Kraków Główny" },
+    { "id": 33035, "name": "Kraków Płaszów" },
+    { "id": 60111, "name": "Bielsko-Biała Główna" },
+    { "id": 60112, "name": "Bielsko-Biała Lipnik" },
+    { "id": 38653, "name": "Łódź Fabryczna" },
+    { "id": 38661, "name": "Łódź Kaliska" },
+    { "id": 70001, "name": "Kraśnik" },
+    { "id": 70002, "name": "Żywiec" }
+  ],
+  "totalCount": 12,
+  "returnedCount": 12,
+  "page": 1,
+  "pageSize": 10000,
+  "totalPages": 1
+}

@@ -1,0 +1,10 @@
+{
+  "generatedAt": "2026-10-11T12:00:00Z",
+  "cities": [
+    { "name": "WARSZAWA", "stationCount": 4, "stationIds": [33605, 33506, 34868, 34587] },
+    { "name": "KRAKÓW", "stationCount": 2, "stationIds": [33019, 33035] },
+    { "name": "BIELSKO-BIAŁA", "stationCount": 2, "stationIds": [60111, 60112] },
+    { "name": "ŁÓDŹ", "stationCount": 2, "stationIds": [38653, 38661] },
+    { "name": "ŻYWIEC", "stationCount": 1, "stationIds": [70002] }
+  ]
+}
