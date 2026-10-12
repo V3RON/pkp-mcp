@@ -1,7 +1,26 @@
-# pkp-mcp
+<h1 align="center">pkp-mcp</h1>
 
-A local [MCP](https://modelcontextprotocol.io) server for Polish train timetables, built on the
-[PKP PLK Open Data API](https://pdp-api.plk-sa.pl/). Works with Claude Code and Codex.
+<p align="center">
+  <b>Ask Claude Code or Codex about Polish trains.</b><br>
+  Connections with changes, station boards, platforms and live delays,<br>
+  from the <a href="https://pdp-api.plk-sa.pl/">PKP PLK Open Data API</a>, over <a href="https://modelcontextprotocol.io">MCP</a>.
+</p>
+
+<p align="center">
+
+[![CI](https://github.com/V3RON/pkp-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/V3RON/pkp-mcp/actions/workflows/ci.yml) ![Node.js 22.13+](https://img.shields.io/badge/node-%E2%89%A522.13-0a0a0a) ![MCP](https://img.shields.io/badge/MCP-stdio-0a0a0a) [![License: MIT](https://img.shields.io/badge/license-MIT-0a0a0a)](LICENSE)
+
+</p>
+
+<img src="assets/hero.svg" alt="Claude Code session: asked for the next train from Warszawa Centralna to Kraków Główny, Claude calls pkp search_connections with live data and finds EIP 1505 at 17:50 from platform 4, running 7 minutes late." width="100%">
+
+## Ask it things like
+
+- *Fastest way from Kraków to Gdańsk tomorrow before 9?*
+- *Next train from Warszawa Centralna to Kraków Główny? Any delays?*
+- *Departures from Poznań Główny after 18:00, intercity only.*
+- *Zakopane on Saturday morning, one change is fine.*
+- *Is IC 3510 running late? Which platform?*
 
 ## Tools
 
