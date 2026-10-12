@@ -7,9 +7,10 @@
 </p>
 
 <p align="center">
-
-[![CI](https://github.com/V3RON/pkp-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/V3RON/pkp-mcp/actions/workflows/ci.yml) ![Node.js 22.13+](https://img.shields.io/badge/node-%E2%89%A522.13-0a0a0a) ![MCP](https://img.shields.io/badge/MCP-stdio-0a0a0a) [![License: MIT](https://img.shields.io/badge/license-MIT-0a0a0a)](LICENSE)
-
+  <a href="https://github.com/V3RON/pkp-mcp/actions/workflows/ci.yml"><img src="https://github.com/V3RON/pkp-mcp/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/node-%E2%89%A522.13-0a0a0a" alt="Node.js 22.13+">
+  <img src="https://img.shields.io/badge/MCP-stdio-0a0a0a" alt="MCP">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0a0a0a" alt="License: MIT"></a>
 </p>
 
 <img src="assets/hero.svg" alt="Claude Code session: asked for the next train from Warszawa Centralna to Kraków Główny, Claude calls pkp search_connections with live data and finds EIP 1505 at 17:50 from platform 4, running 7 minutes late." width="100%">
